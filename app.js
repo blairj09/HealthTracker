@@ -11,7 +11,7 @@ async function load() {
   state.entries = await DB.allEntries();
   for (const k in DEFAULTS) state.settings[k] = await DB.getSetting(k, DEFAULTS[k]);
 }
-const newDraft = () => ({ fatigue: null, fever: null, temp: '', onMeds: state.entries.length ? state.entries.at(-1).onMeds : true, note: '' });
+const newDraft = () => ({ fatigue: null, fever: null, temp: '', hr: '', onMeds: state.entries.length ? state.entries.at(-1).onMeds : true, note: '' });
 
 // ---------- views ----------
 function viewCheckin() {
@@ -24,22 +24,24 @@ function viewCheckin() {
   <div class="card"><p class="q">Fever?</p>
     <div class="seg"><button data-fev="0" class="${d.fever === false ? 'on' : ''}">No</button><button data-fev="1" class="bad ${d.fever ? 'on' : ''}">Yes</button></div>
     ${d.fever ? `<label class="f" for="temp">Temperature °F (optional)</label><input id="temp" type="number" inputmode="decimal" step="0.1" min="90" max="110" value="${esc(d.temp)}">` : ''}</div>
+  <div class="card"><label class="q" for="hr" style="display:block">Heart rate <span class="hint">(optional, from your watch)</span></label><input id="hr" type="number" inputmode="numeric" min="30" max="220" placeholder="bpm" value="${esc(d.hr)}"></div>
   <div class="card"><button class="toggle" id="meds" role="switch" aria-checked="${d.onMeds}"><span><span class="q" style="margin:0">Taking medication</span><br><span class="hint">${d.onMeds ? 'On meds' : 'Off meds (on a break)'}</span></span><span class="sw"></span></button></div>
   <div class="card"><label class="f" for="note" style="margin-top:0">Note (optional)</label><textarea id="note" rows="2" placeholder="Nausea, appetite, anything else…">${esc(d.note)}</textarea></div>
   <button class="primary" id="save" ${d.fatigue && d.fever !== null ? '' : 'disabled style="opacity:.45"'}>Save check-in</button>`;
   app.querySelectorAll('[data-fat]').forEach(b => b.onclick = () => { d.fatigue = +b.dataset.fat; viewCheckin(); });
   app.querySelectorAll('[data-fev]').forEach(b => b.onclick = () => { d.fever = b.dataset.fev === '1'; if (!d.fever) d.temp = ''; viewCheckin(); });
   $('#meds').onclick = () => { d.onMeds = !d.onMeds; viewCheckin(); };
+  $('#hr').oninput = e => d.hr = e.target.value;
   $('#note').oninput = e => d.note = e.target.value;
   if ($('#temp')) $('#temp').oninput = e => d.temp = e.target.value;
   $('#save').onclick = async () => {
-    await DB.addEntry({ ts: Date.now(), fatigue: d.fatigue, fever: d.fever, temp: d.temp ? +d.temp : null, onMeds: d.onMeds, note: d.note.trim() });
+    await DB.addEntry({ ts: Date.now(), fatigue: d.fatigue, fever: d.fever, temp: d.temp ? +d.temp : null, hr: d.hr ? Math.round(+d.hr) : null, onMeds: d.onMeds, note: d.note.trim() });
     state.draft = null; await load(); toast('Saved ✓'); if (GSync.canAuto()) syncSheets(false); scheduleReminders(); show('trends');
   };
 }
 
 function viewTrends() {
-  const days = byDay(state.entries), streak = feverStreak(days), med = medStatus(state.entries);
+  const days = byDay(state.entries), hrDays = days.filter(d => d.hr != null), streak = feverStreak(days), med = medStatus(state.entries);
   const recent = days.slice(-7), avg = recent.length ? (recent.reduce((a, d) => a + d.fatigue, 0) / recent.length).toFixed(1) : '–';
   app.innerHTML = `<h1>Trends</h1>
   <div class="tiles">
@@ -47,16 +49,18 @@ function viewTrends() {
     <div class="tile"><div class="n">${med ? (med.onMeds ? 'On' : 'Off') + ' · ' + med.days + 'd' : '–'}</div><div class="l">Medication status</div></div>
     <div class="tile"><div class="n">${avg}</div><div class="l">Avg fatigue, last 7 days (1–5)</div></div>
     <div class="tile"><div class="n">${recent.filter(d => d.fever).length}/${recent.length}</div><div class="l">Fever days, last 7</div></div>
+    ${hrDays.length ? `<div class="tile"><div class="n">${Math.round(hrDays.slice(-7).reduce((a, d) => a + d.hr, 0) / hrDays.slice(-7).length)} bpm</div><div class="l">Avg heart rate, recent days</div></div>` : ''}
   </div>
   <div class="range">${[7, 14, 30, 90].map(r => `<button data-r="${r}" class="${state.range === r ? 'on' : ''}">${r}d</button>`).join('')}</div>
   <div class="card">${state.entries.length ? trendChart(state.entries, days, state.range) : '<p class="hint">No check-ins yet. Do your first one!</p>'}
-  <div class="legend"><span><i style="background:var(--green)"></i>Fatigue (daily avg)</span><span><i style="background:var(--med)"></i>On meds</span><span><i style="background:var(--red)"></i>Fever day</span></div></div>`;
+  <div class="legend"><span><i style="background:var(--green)"></i>Fatigue (daily avg)</span><span><i style="background:var(--med)"></i>On meds</span><span><i style="background:var(--red)"></i>Fever day</span></div></div>
+  ${hrDays.length ? `<div class="card"><p class="q">Heart rate <span class="hint">(daily avg, bpm)</span></p>${hrChart(hrDays, state.range)}</div>` : ''}`;
   app.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { state.range = +b.dataset.r; viewTrends(); });
 }
 
 function viewHistory() {
   app.innerHTML = `<h1>History</h1><div class="card">${[...state.entries].reverse().map(e => `<div class="row"><div><b>${fmt(e.ts)}</b><br>
-    <span class="pill">Fatigue ${e.fatigue}/5</span> ${e.fever ? `<span class="pill f">Fever${e.temp ? ' ' + e.temp + '°' : ''}</span>` : ''} <span class="pill m">${e.onMeds ? 'On meds' : 'Off meds'}</span>
+    <span class="pill">Fatigue ${e.fatigue}/5</span> ${e.fever ? `<span class="pill f">Fever${e.temp ? ' ' + e.temp + '°' : ''}</span>` : ''} ${e.hr ? `<span class="pill">${e.hr} bpm</span>` : ''} <span class="pill m">${e.onMeds ? 'On meds' : 'Off meds'}</span>
     ${e.note ? `<br><span class="hint">${esc(e.note)}</span>` : ''}</div><button class="ghost danger" data-del="${e.id}" aria-label="Delete">✕</button></div>`).join('') || '<p class="hint">Nothing yet.</p>'}</div>`;
   app.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { if (confirm('Delete this check-in?')) { await DB.deleteEntry(+b.dataset.del); await load(); viewHistory(); } });
 }
@@ -88,8 +92,12 @@ function viewSettings() {
   $('#csv').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([toCSV(state.entries)], { type: 'text/csv' })); a.download = 'health-checkins.csv'; a.click(); };
   $('#imp').onclick = () => $('#file').click();
   $('#file').onchange = async e => {
-    const lines = (await e.target.files[0].text()).trim().split('\n').slice(1); let n = 0;
-    for (const l of lines) { const c = l.split(','); const ts = Date.parse(c[0]); if (!ts || !+c[1]) continue; await DB.addEntry({ ts, fatigue: +c[1], fever: c[2] === '1', temp: c[3] ? +c[3] : null, onMeds: c[4] === '1', note: (c.slice(5).join(',') || '').replace(/^"|"$/g, '').replace(/""/g, '"') }); n++; }
+    const [head, ...lines] = (await e.target.files[0].text()).trim().split('\n'); let n = 0;
+    const hasHr = head.includes('hr_bpm'), noteAt = hasHr ? 6 : 5;
+    for (const l of lines) {
+      const c = l.split(','), ts = Date.parse(c[0]); if (!ts || !+c[1]) continue;
+      await DB.addEntry({ ts, fatigue: +c[1], fever: c[2] === '1', temp: c[3] ? +c[3] : null, onMeds: c[4] === '1', hr: hasHr && c[5] ? +c[5] : null, note: (c.slice(noteAt).join(',') || '').replace(/^"|"$/g, '').replace(/""/g, '"') }); n++;
+    }
     await load(); toast(`Imported ${n}`);
   };
 }

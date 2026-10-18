@@ -1,4 +1,4 @@
-// Pure helpers over entries: {ts, fatigue 1-5, fever bool, temp?, onMeds bool, note?}
+// Pure helpers over entries: {ts, fatigue 1-5, fever bool, temp?, hr?, onMeds bool, note?}
 const DAY = 864e5;
 const dayKey = ts => { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const startOfDay = ts => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
@@ -7,12 +7,13 @@ function byDay(entries) {
   const m = new Map();
   for (const e of entries) {
     const k = dayKey(e.ts);
-    if (!m.has(k)) m.set(k, { key: k, day: startOfDay(e.ts), n: 0, fatigueSum: 0, fever: false, maxTemp: null, onMeds: false });
+    if (!m.has(k)) m.set(k, { key: k, day: startOfDay(e.ts), n: 0, fatigueSum: 0, fever: false, maxTemp: null, hrSum: 0, hrN: 0, onMeds: false });
     const d = m.get(k);
     d.n++; d.fatigueSum += e.fatigue; d.fever ||= e.fever; d.onMeds = e.onMeds; // last entry of the day wins
+    if (e.hr != null) { d.hrSum += e.hr; d.hrN++; }
     if (e.temp != null) d.maxTemp = Math.max(d.maxTemp ?? 0, e.temp);
   }
-  return [...m.values()].map(d => ({ ...d, fatigue: d.fatigueSum / d.n })).sort((a, b) => a.day - b.day);
+  return [...m.values()].map(d => ({ ...d, fatigue: d.fatigueSum / d.n, hr: d.hrN ? d.hrSum / d.hrN : null })).sort((a, b) => a.day - b.day);
 }
 
 // Consecutive calendar days (ending today or yesterday) that had a fever.
@@ -48,7 +49,7 @@ function medSpans(entries, from, to) {
 
 function toCSV(entries) {
   const q = s => '"' + String(s ?? '').replace(/"/g, '""') + '"';
-  return 'timestamp,fatigue_1to5,fever,temp_f,on_meds,note\n' + entries.map(e =>
-    [new Date(e.ts).toISOString(), e.fatigue, e.fever ? 1 : 0, e.temp ?? '', e.onMeds ? 1 : 0, q(e.note)].join(',')).join('\n');
+  return 'timestamp,fatigue_1to5,fever,temp_f,on_meds,hr_bpm,note\n' + entries.map(e =>
+    [new Date(e.ts).toISOString(), e.fatigue, e.fever ? 1 : 0, e.temp ?? '', e.onMeds ? 1 : 0, e.hr ?? '', q(e.note)].join(',')).join('\n');
 }
 if (typeof module !== 'undefined') module.exports = { byDay, feverStreak, medStatus, medSpans, toCSV, dayKey, startOfDay, DAY };
