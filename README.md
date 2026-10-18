@@ -1,6 +1,6 @@
 # Health Check-In
 
-A single-user, phone-first app for logging how someone is feeling through the day and seeing trends over time. Built for tracking fatigue, fevers and medication on/off cycles during cancer treatment.
+A single-user, phone-first app for logging how someone is feeling through the day and seeing trends over time. Tracks fatigue, fevers and medication on/off cycles.
 
 ## What it does
 - **Check in** (10 seconds): fatigue 1–5, fever yes/no (+ optional temperature), medication on/off toggle, optional note.
