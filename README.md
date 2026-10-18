@@ -21,6 +21,9 @@ One-time setup (needs a Google account, ~5 min):
 2. Create an **OAuth client ID** of type *Web application*; add the hosted site's URL (and `http://localhost:8123` for testing) under *Authorized JavaScript origins*.
 3. Put the client ID in `config.js`. While the consent screen is in "Testing", add the user's Google account as a test user.
 
+## Hosting (GitHub Pages)
+`.github/workflows/pages.yml` runs the tests and deploys to GitHub Pages on every push to `main`. One-time: repo **Settings → Pages → Source: GitHub Actions**. The site will be at `https://<user>.github.io/HealthTracker/`; on the Pixel open it in Chrome and choose **Install app**. Use that URL as the OAuth authorized origin (`https://<user>.github.io`, no path).
+
 ## Mockups
 Screenshots of the real app with sample data are in [`mockups/`](mockups/).
 
