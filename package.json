@@ -1,0 +1,7 @@
+{
+  "name": "healthtracker",
+  "private": true,
+  "description": "Single-user health check-in PWA",
+  "scripts": { "test": "node --test" },
+  "dependencies": { "web-push": "^3.6.7" }
+}
