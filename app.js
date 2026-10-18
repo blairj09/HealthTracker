@@ -1,7 +1,7 @@
 const $ = s => document.querySelector(s), app = $('#app');
 const FATIGUE = [['😀', 'None'], ['🙂', 'Mild'], ['😐', 'Moderate'], ['😟', 'Heavy'], ['😫', 'Wiped']];
 const state = { tab: 'checkin', range: 14, draft: null, entries: [], settings: {} };
-const DEFAULTS = { remind: false, perDay: 4, from: '09:00', to: '20:00' };
+const DEFAULTS = { sheetId: '', lastSync: 0, remind: false, perDay: 4, from: '09:00', to: '20:00' };
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = ts => new Date(ts).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -34,7 +34,7 @@ function viewCheckin() {
   if ($('#temp')) $('#temp').oninput = e => d.temp = e.target.value;
   $('#save').onclick = async () => {
     await DB.addEntry({ ts: Date.now(), fatigue: d.fatigue, fever: d.fever, temp: d.temp ? +d.temp : null, onMeds: d.onMeds, note: d.note.trim() });
-    state.draft = null; await load(); toast('Saved ✓'); scheduleReminders(); show('trends');
+    state.draft = null; await load(); toast('Saved ✓'); if (GSync.canAuto()) syncSheets(false); scheduleReminders(); show('trends');
   };
 }
 
@@ -69,7 +69,9 @@ function viewSettings() {
     <label class="f">Between</label><div style="display:flex;gap:8px"><input id="from" type="time" value="${s.from}"><input id="to" type="time" value="${s.to}"></div>
     <p class="hint">Reminders fire while the app is open or recently used. For fully reliable background alerts see the README.</p></div>
   <div class="card"><p class="q">Your data</p><p class="hint">Stored only on this phone.</p>
-    <button class="ghost" id="csv">Export CSV</button> <button class="ghost" id="imp">Import CSV</button> <input id="file" type="file" accept=".csv" hidden></div>`;
+    ${window.GOOGLE_CLIENT_ID ? `<button class="primary" id="gs" style="min-height:52px;margin-bottom:10px">${s.sheetId ? 'Sync to Google Sheets now' : 'Connect Google Sheets'}</button>
+    <p class="hint">${s.sheetId ? `Last synced ${s.lastSync ? fmt(s.lastSync) : 'never'}. Open the sheet in Google Drive (“Health Check-Ins”) and share it with family from there.` : 'Creates a sheet in your Google Drive. The app can only see the sheet it creates.'}</p>` : ''}
+    <button class="ghost" id="share">Share CSV</button> <button class="ghost" id="csv">Export CSV</button> <button class="ghost" id="imp">Import CSV</button> <input id="file" type="file" accept=".csv" hidden></div>`;
   const save = async () => { for (const k in DEFAULTS) await DB.setSetting(k, s[k]); scheduleReminders(); };
   $('#rem').onclick = async () => {
     if (!s.remind && 'Notification' in window && Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') return toast('Notifications blocked');
@@ -78,6 +80,11 @@ function viewSettings() {
   $('#per').onchange = e => { s.perDay = +e.target.value; save(); };
   $('#from').onchange = e => { s.from = e.target.value; save(); };
   $('#to').onchange = e => { s.to = e.target.value; save(); };
+  if ($('#gs')) $('#gs').onclick = () => syncSheets(true).then(viewSettings);
+  $('#share').onclick = async () => {
+    const f = new File([toCSV(state.entries)], 'health-checkins.csv', { type: 'text/csv' });
+    if (navigator.canShare?.({ files: [f] })) navigator.share({ files: [f], title: 'Health check-ins' }).catch(() => {}); else toast('Sharing not supported; use Export');
+  };
   $('#csv').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([toCSV(state.entries)], { type: 'text/csv' })); a.download = 'health-checkins.csv'; a.click(); };
   $('#imp').onclick = () => $('#file').click();
   $('#file').onchange = async e => {
@@ -85,6 +92,17 @@ function viewSettings() {
     for (const l of lines) { const c = l.split(','); const ts = Date.parse(c[0]); if (!ts || !+c[1]) continue; await DB.addEntry({ ts, fatigue: +c[1], fever: c[2] === '1', temp: c[3] ? +c[3] : null, onMeds: c[4] === '1', note: (c.slice(5).join(',') || '').replace(/^"|"$/g, '').replace(/""/g, '"') }); n++; }
     await load(); toast(`Imported ${n}`);
   };
+}
+
+// ---------- google sheets ----------
+async function syncSheets(interactive) {
+  if (!window.GOOGLE_CLIENT_ID || (!interactive && !state.settings.sheetId)) return;
+  try {
+    const id = await GSync.sync(state.entries, state.settings.sheetId, interactive);
+    state.settings.sheetId = id; state.settings.lastSync = Date.now();
+    await DB.setSetting('sheetId', id); await DB.setSetting('lastSync', state.settings.lastSync);
+    if (interactive) toast('Synced to Google Sheets ✓');
+  } catch (e) { if (interactive) toast(e.message); }
 }
 
 // ---------- reminders ----------

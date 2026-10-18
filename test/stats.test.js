@@ -20,3 +20,9 @@ test('med spans merge and clip', () => {
   const s = medSpans([e(5), e(4), e(3, { onMeds: false })], now - 10 * D, now);
   assert.equal(s.length, 2); assert.equal(s[0].onMeds, true);
 });
+
+test('sheet rows are formatted for Sheets', () => {
+  const G = require('../gsync.js');
+  const r = G.rows([{ ts: new Date('2026-10-18T09:05:00').getTime(), fatigue: 4, fever: true, temp: 101.2, onMeds: false, note: 'rough' }]);
+  assert.deepEqual(r[0], ['2026-10-18', '09:05', 4, 'Yes', 101.2, 'Off', 'rough']);
+});
