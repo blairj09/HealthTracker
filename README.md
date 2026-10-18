@@ -3,7 +3,7 @@
 A single-user, phone-first app for logging how someone is feeling through the day and seeing trends over time. Tracks fatigue, fevers and medication on/off cycles.
 
 ## What it does
-- **Check in** (10 seconds): fatigue 1–5, fever yes/no (+ optional temperature), medication on/off toggle, optional note.
+- **Check in** (10 seconds): fatigue 1–5, fever yes/no (+ optional temperature), optional heart rate typed in from the watch, medication on/off toggle, optional note.
 - **Trends**: fatigue line over shaded medication-on periods, a fever-day strip, current fever streak, days on/off meds. 7/14/30/90-day views.
 - **History** with delete, **CSV export/import**.
 - **Random reminders**: N check-ins/day at random times inside a chosen window.

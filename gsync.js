@@ -2,13 +2,13 @@
 // Uses only the drive.file scope: the app can touch just the sheet it created.
 const GSync = (() => {
   const SCOPE = 'https://www.googleapis.com/auth/drive.file';
-  const HEADER = ['Date', 'Time', 'Fatigue (1-5)', 'Fever', 'Temp (F)', 'On meds', 'Note'];
+  const HEADER = ['Date', 'Time', 'Fatigue (1-5)', 'Fever', 'Temp (F)', 'On meds', 'Heart rate (bpm)', 'Note'];
   let token = null, expires = 0, client = null;
 
   const rows = entries => entries.map(e => {
     const d = new Date(e.ts), p = n => String(n).padStart(2, '0');
     return [`${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, `${p(d.getHours())}:${p(d.getMinutes())}`,
-      e.fatigue, e.fever ? 'Yes' : 'No', e.temp ?? '', e.onMeds ? 'On' : 'Off', e.note || ''];
+      e.fatigue, e.fever ? 'Yes' : 'No', e.temp ?? '', e.onMeds ? 'On' : 'Off', e.hr ?? '', e.note || ''];
   });
 
   const loadGsi = () => new Promise((res, rej) => {

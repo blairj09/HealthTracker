@@ -23,6 +23,16 @@ test('med spans merge and clip', () => {
 
 test('sheet rows are formatted for Sheets', () => {
   const G = require('../gsync.js');
-  const r = G.rows([{ ts: new Date('2026-10-18T09:05:00').getTime(), fatigue: 4, fever: true, temp: 101.2, onMeds: false, note: 'rough' }]);
-  assert.deepEqual(r[0], ['2026-10-18', '09:05', 4, 'Yes', 101.2, 'Off', 'rough']);
+  const r = G.rows([{ ts: new Date('2026-10-18T09:05:00').getTime(), fatigue: 4, fever: true, temp: 101.2, onMeds: false, hr: 72, note: 'rough' }]);
+  assert.deepEqual(r[0], ['2026-10-18', '09:05', 4, 'Yes', 101.2, 'Off', 72, 'rough']);
+});
+
+test('daily heart rate averages only entries that have one', () => {
+  const d = byDay([e(0, { hr: 70 }), e(0, { hr: 90 }), e(0)])[0];
+  assert.equal(d.hr, 80);
+  assert.equal(byDay([e(0)])[0].hr, null);
+});
+test('csv has hr column', () => {
+  const { toCSV } = require('../stats.js');
+  assert.match(toCSV([e(0, { hr: 66 })]), /on_meds,hr_bpm,note\n.*,1,66,""$/);
 });
