@@ -14,7 +14,7 @@ It is static files, no build. `python3 -m http.server 8123` then open http://loc
 To install on a Pixel, host it over HTTPS (GitHub Pages, Vercel, Netlify) and in Chrome choose **Install app**.
 
 ## Google Sheets sync (optional)
-Settings → **Connect Google Sheets** creates a sheet called "Health Check-Ins" in the user's own Drive and rewrites it with all check-ins on each sync (so deletes carry over). It uses only the `drive.file` scope, so the app can see only that sheet. Family can be given access with Drive's normal Share button and read it in Sheets, no extra app needed. Without a client ID the button is hidden; "Share CSV" and "Export CSV" always work.
+Settings → **Connect Google Sheets** creates a sheet called "Health Check-Ins" in the user's own Drive. Each sync reads the sheet, merges it with what's on the device, and writes the result back, so every device connected to the sheet ends up with the same history. Merging is by check-in time: new check-ins from either side are added, and a check-in deleted on one device is removed on the others at their next sync (if it was edited on both, the device's own version wins). To use it on another device or account (e.g. a family member's computer), share the sheet from Drive with edit access, then on that device choose **Use an existing sheet** and paste the link. It uses the `spreadsheets` scope, which lets the app open that shared sheet. Without a client ID the button is hidden; "Share CSV" and "Export CSV" always work.
 
 One-time setup (needs a Google account, ~5 min):
 1. In Google Cloud Console create a project, enable **Google Sheets API**.
