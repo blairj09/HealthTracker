@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#2f6f5e">
+<meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0f0e" media="(prefers-color-scheme: dark)">
 <title>Health Check-In</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -12,10 +13,10 @@
 <body>
 <main id="app" aria-live="polite"></main>
 <nav id="tabs" aria-label="Main">
-  <button data-tab="checkin" class="active">Check in</button>
-  <button data-tab="trends">Trends</button>
-  <button data-tab="history">History</button>
-  <button data-tab="settings">Settings</button>
+  <button data-tab="checkin" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Check in</button>
+  <button data-tab="trends"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg>Trends</button>
+  <button data-tab="history"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>History</button>
+  <button data-tab="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14M5 16h14"/><circle cx="9" cy="8" r="2" fill="var(--bg)"/><circle cx="15" cy="16" r="2" fill="var(--bg)"/></svg>Settings</button>
 </nav>
 <div id="toast" role="status"></div>
 <script src="db.js"></script>
