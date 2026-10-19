@@ -1,7 +1,7 @@
 const $ = s => document.querySelector(s), app = $('#app');
 const FATIGUE = [['1', 'None'], ['2', 'Mild'], ['3', 'Moderate'], ['4', 'Heavy'], ['5', 'Wiped']];
 const state = { tab: 'checkin', range: 14, draft: null, entries: [], settings: {} };
-const DEFAULTS = { sheetId: '', lastSync: 0, remind: false, perDay: 4, from: '09:00', to: '20:00' };
+const DEFAULTS = { sheetId: '', lastSync: 0, push: false, pushCode: '', remind: false, perDay: 4, from: '09:00', to: '20:00' };
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = ts => new Date(ts).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -71,15 +71,20 @@ function viewSettings() {
   <div class="card"><button class="toggle" id="rem" role="switch" aria-checked="${s.remind}"><span><span class="q" style="margin:0">Random check-in reminders</span><br><span class="hint">Random times each day, inside your window</span></span><span class="sw"></span></button>
     <label class="f">Check-ins per day</label><select id="per">${[2, 3, 4, 5, 6].map(n => `<option ${n === s.perDay ? 'selected' : ''}>${n}</option>`).join('')}</select>
     <label class="f">Between</label><div style="display:flex;gap:8px"><input id="from" type="time" value="${s.from}"><input id="to" type="time" value="${s.to}"></div>
-    <p class="hint">Reminders fire while the app is open or recently used. For fully reliable background alerts see the README.</p></div>
+    ${state.pushKey ? `<button class="toggle" id="push" role="switch" aria-checked="${s.push}" style="margin-top:14px"><span><span class="q" style="margin:0">Reminders when the app is closed</span><br><span class="hint">Sent from a server so they arrive on time</span></span><span class="sw"></span></button>` : ''}
+    <p class="hint">${state.pushKey ? 'Without it, reminders only fire while the app is open or recently used.' : 'Reminders fire while the app is open or recently used.'}</p></div>
   <div class="card"><p class="q">Your data</p><p class="hint">Stored only on this phone.</p>
     ${window.GOOGLE_CLIENT_ID ? `<button class="primary" id="gs" style="min-height:52px;margin-bottom:10px">${s.sheetId ? 'Sync to Google Sheets now' : 'Connect Google Sheets'}</button>
     <p class="hint">${s.sheetId ? `Last synced ${s.lastSync ? fmt(s.lastSync) : 'never'}. Open the sheet in Google Drive (“Health Check-Ins”) and share it with family from there.` : 'Creates a sheet in your Google Drive. The app can only see the sheet it creates.'}</p>` : ''}
     <button class="ghost" id="share">Share CSV</button> <button class="ghost" id="csv">Export CSV</button> <button class="ghost" id="imp">Import CSV</button> <input id="file" type="file" accept=".csv" hidden></div>`;
-  const save = async () => { for (const k in DEFAULTS) await DB.setSetting(k, s[k]); scheduleReminders(); };
+  const save = async () => { for (const k in DEFAULTS) await DB.setSetting(k, s[k]); scheduleReminders(); if (s.push) pushSync().catch(() => {}); };
   $('#rem').onclick = async () => {
     if (!s.remind && 'Notification' in window && Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') return toast('Notifications blocked');
     s.remind = !s.remind; await save(); viewSettings();
+  };
+  if ($('#push')) $('#push').onclick = async () => {
+    try { await (s.push ? pushOff() : pushOn()); } catch (e) { toast(e.message); }
+    viewSettings();
   };
   $('#per').onchange = e => { s.perDay = +e.target.value; save(); };
   $('#from').onchange = e => { s.from = e.target.value; save(); };
@@ -100,6 +105,40 @@ function viewSettings() {
     }
     await load(); toast(`Imported ${n}`);
   };
+}
+
+// ---------- web push (reminders while the app is closed) ----------
+const b64 = s => Uint8Array.from(atob((s + '='.repeat((4 - s.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+async function pushPost(path, body) {
+  const r = await fetch('api/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (r.status === 401) { state.settings.pushCode = ''; await DB.setSetting('pushCode', ''); throw new Error('Wrong setup code'); }
+  if (!r.ok) throw new Error('Server error ' + r.status);
+}
+async function pushSync() {
+  const s = state.settings, reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+  if (!sub) return;
+  await pushPost('subscribe', { code: s.pushCode, subscription: sub.toJSON(), perDay: s.perDay, from: s.from, to: s.to, tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+}
+async function pushOn() {
+  const s = state.settings;
+  if (!s.pushCode) { s.pushCode = (prompt('Enter the setup code') || '').trim(); if (!s.pushCode) return; }
+  if (Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') throw new Error('Notifications blocked');
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(state.pushKey) });
+  s.push = true;
+  try { await pushSync(); } catch (e) { s.push = false; await sub.unsubscribe(); await DB.setSetting('pushCode', s.pushCode); throw e; }
+  await DB.setSetting('push', true); await DB.setSetting('pushCode', s.pushCode); scheduleReminders();
+  toast('Background reminders on ✓');
+}
+async function pushOff() {
+  const s = state.settings, reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+  try { await pushPost('unsubscribe', { code: s.pushCode }); } catch (e) { /* still turn off locally */ }
+  if (sub) await sub.unsubscribe();
+  s.push = false; await DB.setSetting('push', false); scheduleReminders();
+}
+async function detectPush() {
+  if (!('PushManager' in window) || !('serviceWorker' in navigator)) return;
+  try { const r = await fetch('api/vapid'); if (r.ok) state.pushKey = (await r.json()).key; } catch (e) { /* offline or not configured */ }
 }
 
 // ---------- google sheets ----------
@@ -133,7 +172,7 @@ async function notify() {
 }
 function scheduleReminders() {
   timers.forEach(clearTimeout); timers = [];
-  if (!state.settings.remind) return;
+  if (!state.settings.remind || state.settings.push) return;
   const last = state.entries.at(-1)?.ts ?? 0, now = Date.now();
   plannedTimes().forEach(t => {
     if (t > now) timers.push(setTimeout(notify, t - now));
@@ -152,5 +191,6 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => show(b.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleReminders(); });
 (async () => {
   await load(); show(new URLSearchParams(location.search).get('tab') || 'checkin'); scheduleReminders();
+  detectPush().then(() => state.tab === 'settings' && viewSettings());
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

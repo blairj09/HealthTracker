@@ -1,0 +1,16 @@
+name: Send check-in reminders
+# Pings the push function every 15 minutes. Needs repo variable TICK_URL and secret CRON_SECRET (see README).
+# GitHub runs scheduled jobs on a best-effort basis, so a reminder can arrive a few minutes late.
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+jobs:
+  tick:
+    if: ${{ vars.TICK_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -m 30 -H "Authorization: Bearer $CRON_SECRET" "$TICK_URL"
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          TICK_URL: ${{ vars.TICK_URL }}
