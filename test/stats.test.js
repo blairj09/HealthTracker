@@ -36,3 +36,28 @@ test('csv has hr column', () => {
   const { toCSV } = require('../stats.js');
   assert.match(toCSV([e(0, { hr: 66 })]), /on_meds,hr_bpm,note\n.*,1,66,""$/);
 });
+
+test('sheet rows round-trip, including serial-number dates', () => {
+  const G = require('../gsync.js');
+  const ts = new Date('2026-10-18T09:05:00').getTime();
+  const [r] = G.rows([{ ts, fatigue: 4, fever: true, temp: 101.2, onMeds: false, hr: 72, note: 'rough' }]);
+  assert.deepEqual(G.parse([r])[0], { ts, fatigue: 4, fever: true, temp: 101.2, onMeds: false, hr: 72, note: 'rough' });
+  const serial = [46313, 9 * 60 / 1440 + 5 / 1440, 4, 'Yes', 101.2, 'Off', 72, 'rough'];
+  assert.equal(G.parse([serial])[0].ts, ts);
+  assert.equal(G.parse([G.HEADER]).length, 0);
+});
+test('sheet link or bare id is accepted', () => {
+  const G = require('../gsync.js'), id = '1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
+  assert.equal(G.parseId(`https://docs.google.com/spreadsheets/d/${id}/edit#gid=0`), id);
+  assert.equal(G.parseId(id), id); assert.equal(G.parseId('nope'), '');
+});
+test('merge adds new entries from both sides', () => {
+  const G = require('../gsync.js'), a = { ts: 6e4 * 10 }, b = { ts: 6e4 * 20 };
+  assert.deepEqual(G.merge([a], [b], []).map(e => e.ts), [a.ts, b.ts]);
+});
+test('merge propagates deletes from either side but never wipes a fresh device', () => {
+  const G = require('../gsync.js'), a = { ts: 6e4 * 10 }, b = { ts: 6e4 * 20 }, synced = [10, 20];
+  assert.deepEqual(G.merge([a, b], [a], synced), [a]);   // deleted in the sheet elsewhere
+  assert.deepEqual(G.merge([a], [a, b], synced), [a]);   // deleted on this device
+  assert.deepEqual(G.merge([], [a, b], []), [a, b]);     // new device pulls everything
+});

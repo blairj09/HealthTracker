@@ -1,7 +1,7 @@
 const $ = s => document.querySelector(s), app = $('#app');
 const FATIGUE = [['😀', 'None'], ['🙂', 'Mild'], ['😐', 'Moderate'], ['😟', 'Heavy'], ['😫', 'Wiped']];
 const state = { tab: 'checkin', range: 14, draft: null, entries: [], settings: {} };
-const DEFAULTS = { sheetId: '', lastSync: 0, remind: false, perDay: 4, from: '09:00', to: '20:00' };
+const DEFAULTS = { sheetId: '', lastSync: 0, synced: [], remind: false, perDay: 4, from: '09:00', to: '20:00' };
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = ts => new Date(ts).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -74,7 +74,8 @@ function viewSettings() {
     <p class="hint">Reminders fire while the app is open or recently used. For fully reliable background alerts see the README.</p></div>
   <div class="card"><p class="q">Your data</p><p class="hint">Stored only on this phone.</p>
     ${window.GOOGLE_CLIENT_ID ? `<button class="primary" id="gs" style="min-height:52px;margin-bottom:10px">${s.sheetId ? 'Sync to Google Sheets now' : 'Connect Google Sheets'}</button>
-    <p class="hint">${s.sheetId ? `Last synced ${s.lastSync ? fmt(s.lastSync) : 'never'}. Open the sheet in Google Drive (“Health Check-Ins”) and share it with family from there.` : 'Creates a sheet in your Google Drive. The app can only see the sheet it creates.'}</p>` : ''}
+    <p class="hint">${s.sheetId ? `Last synced ${s.lastSync ? fmt(s.lastSync) : 'never'}. Check-ins from any device using this sheet appear here. Share the sheet from Google Drive so family can connect their own device.` : 'Creates a sheet in your Google Drive and keeps it in sync across devices.'}</p>
+    ${s.sheetId ? '' : '<button class="ghost" id="gs2" style="margin-bottom:10px">Use an existing sheet</button>'}` : ''}
     <button class="ghost" id="share">Share CSV</button> <button class="ghost" id="csv">Export CSV</button> <button class="ghost" id="imp">Import CSV</button> <input id="file" type="file" accept=".csv" hidden></div>`;
   const save = async () => { for (const k in DEFAULTS) await DB.setSetting(k, s[k]); scheduleReminders(); };
   $('#rem').onclick = async () => {
@@ -84,6 +85,7 @@ function viewSettings() {
   $('#per').onchange = e => { s.perDay = +e.target.value; save(); };
   $('#from').onchange = e => { s.from = e.target.value; save(); };
   $('#to').onchange = e => { s.to = e.target.value; save(); };
+  if ($('#gs2')) $('#gs2').onclick = connectExisting;
   if ($('#gs')) $('#gs').onclick = () => syncSheets(true).then(viewSettings);
   $('#share').onclick = async () => {
     const f = new File([toCSV(state.entries)], 'health-checkins.csv', { type: 'text/csv' });
@@ -103,14 +105,27 @@ function viewSettings() {
 }
 
 // ---------- google sheets ----------
-async function syncSheets(interactive) {
-  if (!window.GOOGLE_CLIENT_ID || (!interactive && !state.settings.sheetId)) return;
+async function syncSheets(interactive, sheetId = state.settings.sheetId) {
+  if (!window.GOOGLE_CLIENT_ID || (!interactive && !sheetId)) return;
   try {
-    const id = await GSync.sync(state.entries, state.settings.sheetId, interactive);
-    state.settings.sheetId = id; state.settings.lastSync = Date.now();
-    await DB.setSetting('sheetId', id); await DB.setSetting('lastSync', state.settings.lastSync);
+    const r = await GSync.sync(state.entries, sheetId, state.settings.synced, interactive);
+    // Apply the merge to local storage: add what came from the sheet, drop what was deleted elsewhere.
+    const have = new Map(state.entries.map(e => [GSync.key(e.ts), e])), keep = new Set(r.entries.map(e => GSync.key(e.ts)));
+    for (const e of state.entries) if (!keep.has(GSync.key(e.ts))) await DB.deleteEntry(e.id);
+    for (const e of r.entries) if (!have.has(GSync.key(e.ts))) await DB.addEntry(e);
+    state.settings.sheetId = r.id; state.settings.lastSync = Date.now(); state.settings.synced = [...keep];
+    for (const k of ['sheetId', 'lastSync', 'synced']) await DB.setSetting(k, state.settings[k]);
+    await load();
     if (interactive) toast('Synced to Google Sheets ✓');
+    return true;
   } catch (e) { if (interactive) toast(e.message); }
+}
+// Link this device to a sheet that already exists (e.g. the patient's, shared with family).
+async function connectExisting() {
+  const id = GSync.parseId(prompt('Paste the link to the shared “Health Check-Ins” sheet'));
+  if (!id) return toast('That does not look like a sheet link');
+  state.settings.synced = [];
+  if (await syncSheets(true, id)) viewSettings();
 }
 
 // ---------- reminders ----------
@@ -152,5 +167,6 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => show(b.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleReminders(); });
 (async () => {
   await load(); show(new URLSearchParams(location.search).get('tab') || 'checkin'); scheduleReminders();
+  syncSheets(false).then(ok => ok && state.tab !== 'settings' && show(state.tab));
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
