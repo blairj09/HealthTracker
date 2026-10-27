@@ -1,5 +1,5 @@
 const $ = s => document.querySelector(s), app = $('#app');
-const FATIGUE = [['1', 'None'], ['2', 'Mild'], ['3', 'Moderate'], ['4', 'Heavy'], ['5', 'Wiped']];
+const FATIGUE = [['😀', 'None'], ['🙂', 'Mild'], ['😐', 'Moderate'], ['😟', 'Heavy'], ['😫', 'Wiped']];
 const state = { tab: 'checkin', range: 14, draft: null, entries: [], settings: {} };
 const DEFAULTS = { sheetId: '', lastSync: 0, remind: false, perDay: 4, from: '09:00', to: '20:00' };
 
