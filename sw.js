@@ -1,4 +1,4 @@
-const CACHE = 'hc-v2';
+const CACHE = 'hc-v3';
 const ASSETS = ['./', 'index.html', 'styles.css', 'db.js', 'stats.js', 'charts.js', 'app.js', 'config.js', 'gsync.js', 'manifest.webmanifest', 'icons/icon.svg'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
@@ -9,4 +9,10 @@ self.addEventListener('fetch', e => {
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(clients.matchAll({ type: 'window' }).then(cs => cs[0] ? cs[0].focus() : clients.openWindow('./')));
+});
+
+self.addEventListener('push', e => {
+  let d = {}; try { d = e.data.json(); } catch (_) {}
+  e.waitUntil(self.registration.showNotification(d.title || 'Time for a quick check-in', {
+    body: d.body || 'Tap to log how you’re feeling.', icon: 'icons/icon-192.png', tag: 'checkin', renotify: true }));
 });
