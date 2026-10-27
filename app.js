@@ -18,16 +18,16 @@ function viewCheckin() {
   const d = state.draft ||= newDraft();
   const last = state.entries.at(-1);
   app.innerHTML = `<h1>How are you feeling?</h1>
-  ${last ? `<p class="hint">Last check-in: ${fmt(last.ts)}</p>` : ''}
+  ${last ? `<p class="hint">Last check-in ${fmt(last.ts)}</p>` : ''}
   <div class="card"><p class="q">Fatigue right now</p>
     <div class="scale">${FATIGUE.map((f, i) => `<button data-fat="${i + 1}" class="${d.fatigue === i + 1 ? 'on' : ''}"><b>${f[0]}</b>${f[1]}</button>`).join('')}</div></div>
   <div class="card"><p class="q">Fever?</p>
     <div class="seg"><button data-fev="0" class="${d.fever === false ? 'on' : ''}">No</button><button data-fev="1" class="bad ${d.fever ? 'on' : ''}">Yes</button></div>
-    ${d.fever ? `<label class="f" for="temp">Temperature °F (optional)</label><input id="temp" type="number" inputmode="decimal" step="0.1" min="90" max="110" value="${esc(d.temp)}">` : ''}</div>
-  <div class="card"><label class="q" for="hr" style="display:block">Heart rate <span class="hint">(optional, from your watch)</span></label><input id="hr" type="number" inputmode="numeric" min="30" max="220" placeholder="bpm" value="${esc(d.hr)}"></div>
-  <div class="card"><button class="toggle" id="meds" role="switch" aria-checked="${d.onMeds}"><span><span class="q" style="margin:0">Taking medication</span><br><span class="hint">${d.onMeds ? 'On meds' : 'Off meds (on a break)'}</span></span><span class="sw"></span></button></div>
-  <div class="card"><label class="f" for="note" style="margin-top:0">Note (optional)</label><textarea id="note" rows="2" placeholder="Nausea, appetite, anything else…">${esc(d.note)}</textarea></div>
-  <button class="primary" id="save" ${d.fatigue && d.fever !== null ? '' : 'disabled style="opacity:.45"'}>Save check-in</button>`;
+    ${d.fever ? `<label class="f" for="temp">Temperature °F, optional</label><input id="temp" type="number" inputmode="decimal" step="0.1" min="90" max="110" value="${esc(d.temp)}">` : ''}</div>
+  <div class="card"><label class="q" for="hr">Heart rate <span class="hint">optional, from your watch</span></label><input id="hr" type="number" inputmode="numeric" min="30" max="220" placeholder="bpm" value="${esc(d.hr)}"></div>
+  <div class="card"><button class="toggle" id="meds" role="switch" aria-checked="${d.onMeds}"><span><span><span class="q">Taking medication</span><span class="hint">${d.onMeds ? 'On meds' : 'Off meds (on a break)'}</span></span></span><span class="sw"></span></button></div>
+  <div class="card"><label class="q" for="note">Note <span class="hint">optional</span></label><textarea id="note" rows="2" placeholder="Nausea, appetite, anything else…">${esc(d.note)}</textarea></div>
+  <div class="save-bar"><button class="primary" id="save" ${d.fatigue && d.fever !== null ? '' : 'disabled'}>Save check-in</button></div>`;
   app.querySelectorAll('[data-fat]').forEach(b => b.onclick = () => { d.fatigue = +b.dataset.fat; viewCheckin(); });
   app.querySelectorAll('[data-fev]').forEach(b => b.onclick = () => { d.fever = b.dataset.fev === '1'; if (!d.fever) d.temp = ''; viewCheckin(); });
   $('#meds').onclick = () => { d.onMeds = !d.onMeds; viewCheckin(); };
@@ -45,7 +45,7 @@ function viewTrends() {
   const recent = days.slice(-7), avg = recent.length ? (recent.reduce((a, d) => a + d.fatigue, 0) / recent.length).toFixed(1) : '–';
   app.innerHTML = `<h1>Trends</h1>
   <div class="tiles">
-    <div class="tile ${streak >= 3 ? 'alert' : ''}"><div class="n">${streak} day${streak === 1 ? '' : 's'}</div><div class="l">${streak >= 3 ? 'Fever streak — consider calling your care team' : 'Current fever streak'}</div></div>
+    <div class="tile ${streak >= 3 ? 'alert' : ''}"><div class="n">${streak} day${streak === 1 ? '' : 's'}</div><div class="l">${streak >= 3 ? 'Fever streak. Consider calling your care team' : 'Current fever streak'}</div></div>
     <div class="tile"><div class="n">${med ? (med.onMeds ? 'On' : 'Off') + ' · ' + med.days + 'd' : '–'}</div><div class="l">Medication status</div></div>
     <div class="tile"><div class="n">${avg}</div><div class="l">Avg fatigue, last 7 days (1–5)</div></div>
     <div class="tile"><div class="n">${recent.filter(d => d.fever).length}/${recent.length}</div><div class="l">Fever days, last 7</div></div>
@@ -53,15 +53,15 @@ function viewTrends() {
   </div>
   <div class="range">${[7, 14, 30, 90].map(r => `<button data-r="${r}" class="${state.range === r ? 'on' : ''}">${r}d</button>`).join('')}</div>
   <div class="card">${state.entries.length ? trendChart(state.entries, days, state.range) : '<p class="hint">No check-ins yet. Do your first one!</p>'}
-  <div class="legend"><span><i style="background:var(--green)"></i>Fatigue (daily avg)</span><span><i style="background:var(--med)"></i>On meds</span><span><i style="background:var(--red)"></i>Fever day</span></div></div>
-  ${hrDays.length ? `<div class="card"><p class="q">Heart rate <span class="hint">(daily avg, bpm)</span></p>${hrChart(hrDays, state.range)}</div>` : ''}`;
+  <div class="legend"><span><i style="background:var(--green)"></i>Fatigue, daily avg</span><span><i class="sq" style="background:var(--med)"></i>On meds</span><span><i style="background:var(--red)"></i>Fever day</span></div></div>
+  ${hrDays.length ? `<div class="card"><p class="q">Heart rate <span class="hint">daily avg, bpm</span></p>${hrChart(hrDays, state.range)}</div>` : ''}`;
   app.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { state.range = +b.dataset.r; viewTrends(); });
 }
 
 function viewHistory() {
-  app.innerHTML = `<h1>History</h1><div class="card">${[...state.entries].reverse().map(e => `<div class="row"><div><b>${fmt(e.ts)}</b><br>
-    <span class="pill">Fatigue ${e.fatigue}/5</span> ${e.fever ? `<span class="pill f">Fever${e.temp ? ' ' + e.temp + '°' : ''}</span>` : ''} ${e.hr ? `<span class="pill">${e.hr} bpm</span>` : ''} <span class="pill m">${e.onMeds ? 'On meds' : 'Off meds'}</span>
-    ${e.note ? `<br><span class="hint">${esc(e.note)}</span>` : ''}</div><button class="ghost danger" data-del="${e.id}" aria-label="Delete">✕</button></div>`).join('') || '<p class="hint">Nothing yet.</p>'}</div>`;
+  app.innerHTML = `<h1>History</h1><div class="list">${[...state.entries].reverse().map(e => `<div class="row"><div><b class="when">${fmt(e.ts)}</b>
+    <span class="pill fat">Fatigue ${e.fatigue}/5</span> ${e.fever ? `<span class="pill f">Fever${e.temp ? ' ' + e.temp + '°' : ''}</span>` : ''} ${e.hr ? `<span class="pill">${e.hr} bpm</span>` : ''} <span class="pill m">${e.onMeds ? 'On meds' : 'Off meds'}</span>
+    ${e.note ? `<span class="hint note">${esc(e.note)}</span>` : ''}</div><button class="ghost danger" data-del="${e.id}" aria-label="Delete">✕</button></div>`).join('') || '<p class="hint">Nothing yet.</p>'}</div>`;
   app.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { if (confirm('Delete this check-in?')) { await DB.deleteEntry(+b.dataset.del); await load(); viewHistory(); } });
 }
 
